@@ -1,0 +1,52 @@
+# Copy to config.toml and change what you need; every line is optional (these are the defaults).
+
+# --- push-to-talk ----------------------------------------------------------
+hotkey = "left_option"         # left_option, right_option, right_command, right_control, fn, f13 … f20, keycode:<n>
+                               # (python -m audio_input --pick-key: press a key to choose it)
+start_delay = 0.25             # held alone this long before the microphone opens, so the key still works
+                               # in shortcuts (Option+←, Option+⌫, Option-click …); 0 = open at once
+min_seconds = 0.5              # shorter holds are ignored
+max_seconds = 120              # the recording stops by itself after this long
+# input_device = "Logitech BRIO"   # microphone name (or part of it) or index: python -m audio_input --list-devices
+
+# --- putting the text where the cursor is --------------------------------
+insert = "paste"               # paste (clipboard + Cmd+V, clipboard restored) | type (key events) | none
+insert_text = "transcript"     # transcript (what you said) | corrected (the grammar-corrected sentence)
+restore_clipboard = true
+smart_spacing = true           # add a space when the cursor is right after a word
+keep_fillers = false           # false: "um", "uh" … are left out of the inserted text (the overlay still shows them)
+
+# --- speech recognition ----------------------------------------------------
+whisper_backend = "auto"       # mlx (Apple GPU, large-v3-turbo) | faster (CPU, small.en) | auto
+mlx_model = "mlx-community/whisper-large-v3-turbo"
+whisper_model = "small.en"     # faster-whisper model: base.en (faster), small.en, medium.en …
+beam_size = 5                  # faster-whisper only
+vocabulary = []                # names and terms Whisper should know, e.g. ["Adam", "PyTorch", "Berkeley"]
+# Whisper imitates its prompt: a spoken, imperfect one keeps your grammar and fillers as they were said.
+# Set to "" to let Whisper tidy up (it may then "fix" some of your grammar before the check sees it).
+whisper_prompt = "Um, so, uh, yesterday I go to the lab and my friend say the code are broken, so we fix it."
+
+# --- feedback --------------------------------------------------------------
+phonemes = true                # sounds (IPA), stress, rhythm: the bundled Parrot Shadowing analysis
+focus = ["final", "th", "r", "sz", "stress"]   # your focus areas, shown first with the teacher's tips;
+                               # also: "uh" (no extra uh), "rhythm", "pause", "focus" (intonation)
+model_voice = true             # a macOS voice reads the corrected sentence (▶ model, ⇄ compare, its stress bars)
+tts_voice = "Samantha"         # any English voice of: say -v '?'
+grammar = true
+grammar_model = "grammarly/coedit-large"
+grammar_device = "auto"        # auto (Apple GPU) | mps | cpu
+
+# --- overlay ---------------------------------------------------------------
+overlay = true
+overlay_seconds = 0            # 0: always on screen (close it with ✕); otherwise hide a result after this long
+idle_opacity = 0.35            # opacity while the mouse is not over it (1 = never fades)
+attention_seconds = 4          # a new result stays fully visible this long, then fades (0 = only the mouse decides)
+overlay_width = 960
+font_size = 28
+ipa = "all"                    # all | errors (only under words with a sound problem) | off
+click_through = false          # true: the overlay ignores the mouse (cannot be dragged), like locked lyrics
+
+# --- storage ---------------------------------------------------------------
+recent = 10                    # recordings kept in data/recent to replay and compare (‹ › in the overlay)
+history = true                 # data/history.jsonl (used by the practice report)
+keep_audio = false             # also keep every recording in data/recordings

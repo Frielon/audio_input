@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>audio_input overlay</title>
+<style>
+  :root {
+    --fs: 28px;
+    --maxw: 960px;
+    --text: #f4f6fb;
+    --dim: rgba(232, 236, 244, 0.62);
+    --faint: rgba(232, 236, 244, 0.38);
+    --ok: #3ccf7a;
+    --close: #f2b544;
+    --wrong: #ff5f6d;
+    --grammar: #7aa7ff;
+    --fix: #57e08f;
+    --record: #ff4d5e;
+    --focus: #f2b544;
+    --bar: #8fb4ff;
+    --panel: rgba(13, 15, 21, 0.66);
+    color-scheme: dark;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    color: var(--text); -webkit-font-smoothing: antialiased; cursor: default; user-select: none;
+  }
+  #root {
+    position: relative; display: inline-block; box-sizing: border-box; max-width: var(--maxw); min-width: 120px;
+    padding: 12px 22px 10px; background: var(--panel); border-radius: 18px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
+  #root.closable { padding-right: 40px; }
+  .close { position: absolute; top: 7px; right: 8px; width: 22px; height: 22px; line-height: 22px;
+           text-align: center; font-size: 13px; color: var(--dim); border-radius: 50%;
+           background: rgba(255, 255, 255, 0.08); text-shadow: none; }
+  .close.hover { background: rgba(255, 95, 109, 0.85); color: #fff; }
+  .fold { position: absolute; top: 33px; right: 8px; width: 22px; height: 22px; line-height: 21px;
+          text-align: center; font-size: 17px; color: var(--dim); border-radius: 50%;
+          background: rgba(255, 255, 255, 0.08); text-shadow: none; }
+  .fold.hover { background: rgba(122, 167, 255, 0.6); color: #fff; }
+  #root.folded { min-height: 58px; }
+  #root.folded .corrected { margin-top: 4px; }
+  .status.idle .icon { color: var(--dim); }
+  .hidden { display: none !important; }
+  [data-act] { border-radius: 6px; transition: background 80ms linear; }
+  [data-act].hover { background: rgba(122, 167, 255, 0.22); }
+  [data-act].flash { background: rgba(122, 167, 255, 0.45); }
+
+  /* ----- status pill: listening / working / messages ----- */
+  .status { display: flex; align-items: center; gap: 10px; font-size: 15px; white-space: nowrap; padding: 2px 0; }
+  .status .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--record);
+                 box-shadow: 0 0 10px var(--record); animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  .status .dot.wait { background: rgba(255, 255, 255, 0.45); box-shadow: none; }
+  .status .time { font-variant-numeric: tabular-nums; color: var(--dim); }
+  .status .hint { color: var(--faint); font-size: 12px; margin-left: 4px; }
+  .meter { display: inline-flex; align-items: center; gap: 2px; height: 20px; }
+  .meter i { display: block; width: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); min-height: 2px; transition: height 70ms linear; }
+  .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25);
+             border-top-color: #fff; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status.warn .icon { color: var(--close); }
+  .status.error .icon { color: var(--wrong); }
+  .status.info .icon { color: var(--grammar); }
+  .status .sub { color: var(--dim); font-size: 13px; }
+
+  /* ----- the sentence, word by word ----- */
+  .line { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 0.3em; row-gap: 2px;
+          font-size: var(--fs); }
+  .col { display: inline-flex; flex-direction: column; align-items: center; }
+  .fix { font-size: 0.46em; height: 1.15em; line-height: 1.15em; color: var(--fix); font-weight: 650; white-space: nowrap; }
+  .fix.sug { color: #9ec3ff; }
+  .wd { line-height: 1.12; font-weight: 520; white-space: nowrap; letter-spacing: 0.005em; padding: 0 0.06em; }
+  .ipa { font-size: 0.52em; line-height: 1.3; white-space: nowrap; letter-spacing: 0.02em; padding: 0 3px; }
+  .hd { font-size: 0.42em; line-height: 1.25; min-height: 1.25em; white-space: nowrap; color: var(--close);
+        display: flex; align-items: flex-end; gap: 5px; }
+  .line.nofix .fix, .line.noipa .ipa, .line.nohd .hd { display: none; }
+  .line.plain .wd { color: var(--text); }
+
+  .wd.fn { opacity: 0.9; }
+  .wd.filler { opacity: 0.5; font-style: italic; }
+  .wd.s-warn { color: #ffd88a; }
+  .wd.s-bad { color: #ff9aa4; }
+  .wd.g-err { text-decoration: underline wavy var(--grammar); -webkit-text-decoration: underline wavy var(--grammar);
+              text-decoration-thickness: 2px; text-underline-offset: 6px; text-decoration-skip-ink: none; }
+  .wd.g-sug { text-decoration: underline dotted #9ec3ff; -webkit-text-decoration: underline dotted #9ec3ff;
+              text-decoration-thickness: 2px; text-underline-offset: 6px; }
+  .wd.g-del { text-decoration: line-through var(--wrong); -webkit-text-decoration: line-through var(--wrong);
+              text-decoration-thickness: 2px; opacity: 0.8; }
+  .col.ins .wd { color: var(--fix); font-weight: 700; }
+  .col.ins.sug .wd { color: #9ec3ff; }
+
+  .ipa i { font-style: normal; }
+  .ipa .ok { color: rgba(60, 207, 122, 0.85); }
+  .ipa .sub { color: var(--close); text-decoration: underline dotted; text-underline-offset: 3px; }
+  .ipa .del { color: var(--wrong); text-decoration: line-through; }
+  .ipa .sts { font-weight: 750; }
+  .ipa .mk { color: var(--text); font-weight: 700; }
+  .ipa .sep { color: var(--faint); }
+  .ipa.none { color: var(--faint); }
+  .ipa.form { color: rgba(60, 207, 122, 0.85); }
+  .hd .bad { color: var(--wrong); }
+
+  /* stress: prominence of each syllable; outlined = the syllable to stress */
+  .sbars { display: inline-flex; align-items: flex-end; gap: 2px; height: 17px; padding: 0 1px; }
+  .sbars i { display: block; width: 6px; background: var(--bar); border-radius: 2px 2px 0 0; opacity: 0.9; }
+  .sbars i.exp { box-shadow: 0 0 0 1px var(--focus); }
+  .sbars.model { margin-left: 2px; }
+  .sbars i.none { background: rgba(255, 255, 255, 0.18); }
+  .sbars.bad i { background: var(--wrong); }
+  .sbars.good i { background: var(--ok); }
+  .sbars.model i { background: rgba(232, 236, 244, 0.45); }
+
+  /* ----- corrected sentence, coach, grammar, controls ----- */
+  .corrected { margin-top: 7px; font-size: calc(var(--fs) * 0.6); color: var(--dim); line-height: 1.35; }
+  .corrected .tick { color: var(--fix); font-weight: 700; margin-right: 6px; }
+  .corrected b { color: var(--fix); font-weight: 650; }
+  .notes { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; line-height: 1.38; }
+  .crow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  .crow .ci { width: 13px; text-align: center; font-weight: 700; color: var(--wrong); flex: none; }
+  .crow.unsure .ci { color: var(--dim); }
+  .crow b { font-weight: 650; white-space: nowrap; }
+  .crow.focus b { color: #ffd88a; }
+  .crow .cn { color: var(--faint); font-size: 12px; white-space: nowrap; }
+  .citem { display: inline-flex; align-items: baseline; gap: 5px; padding: 0 3px; }
+  .citem .lbl { color: #ff9aa4; font-weight: 600; white-space: nowrap; }
+  .citem.unsure .lbl { color: var(--text); }
+  .citem .det { color: var(--dim); }
+  .citem .sbars { align-self: flex-end; }
+  .tip { color: var(--dim); font-size: 12.5px; padding-left: 21px; }
+  .tip::before { content: "💡 "; }
+  .fine { color: rgba(87, 224, 143, 0.9); padding-left: 21px; }
+  .fine .ci { color: var(--ok); font-weight: 700; margin-right: 6px; }
+  .grow { display: flex; gap: 8px; align-items: baseline; }
+  .grow .tag { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+               padding: 1px 6px; border-radius: 5px; transform: translateY(-1px); }
+  .grow.grammar .tag { background: rgba(122, 167, 255, 0.22); color: #a9c6ff; }
+  .grow.suggestion .tag { background: rgba(255, 255, 255, 0.1); color: var(--dim); }
+  .grow .lbl { color: var(--dim); white-space: nowrap; }
+  .grow.more { color: var(--faint); }
+  .allgood { color: var(--fix); }
+  .bar { margin-top: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 12.5px; }
+  .btn { padding: 2px 9px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.07);
+         color: var(--text); white-space: nowrap; }
+  .btn.off { opacity: 0.35; }
+  .bar .meta { color: var(--faint); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .bar .meta .good { color: rgba(87, 224, 143, 0.85); }
+  .bar .meta .warn { color: var(--close); }
+  .bar .nav { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--faint); white-space: nowrap; }
+  .bar .nav .btn { padding: 1px 8px; font-size: 14px; line-height: 1.2; }
+  .bar .hint { color: var(--faint); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div id="root"><div class="status"><span class="label">audio_input</span></div></div>
+<script>
+"use strict";
+(function () {
+  const root = document.getElementById("root");
+  const cfg = { ipa: "all", maxGrammar: 4, folded: false };
+  const levels = new Array(14).fill(0);
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ordinal = (k) => ({ 1: "1st", 2: "2nd", 3: "3rd" }[k] || `${k}th`);
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  /** Report the size and the clickable regions (the window catches the clicks; the page never gets focus). */
+  function post() {
+    requestAnimationFrame(() => {
+      const r = root.getBoundingClientRect();
+      const regions = [...root.querySelectorAll("[data-act]")].map((el) => {
+        const b = el.getBoundingClientRect();
+        return [el.dataset.act, Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)];
+      });
+      try { window.webkit.messageHandlers.size.postMessage({ w: Math.ceil(r.width), h: Math.ceil(r.height), r: regions }); }
+      catch (e) { /* opened in a browser */ }
+    });
+  }
+  const CLOSE = `<span class="close" data-act="close">✕</span>`;
+  /** ``closable``: the ✕ in the corner; ``foldable``: also the ▴/▾ that folds the details away. */
+  function set(html, closable = false, foldable = false) {
+    root.className = [closable ? "closable" : "", foldable && cfg.folded ? "folded" : ""].join(" ").trim();
+    const fold = foldable ? `<span class="fold" data-act="fold">${cfg.folded ? "▾" : "▴"}</span>` : "";
+    root.innerHTML = html + (closable ? CLOSE + fold : "");
+    post();
+  }
+
+  function config(c) {
+    if (c.fontSize) document.documentElement.style.setProperty("--fs", `${c.fontSize}px`);
+    if (c.maxWidth) document.documentElement.style.setProperty("--maxw", `${c.maxWidth}px`);
+    Object.assign(cfg, c);
+    post();
+  }
+
+  function hover(act) {
+    root.querySelectorAll(".hover").forEach((el) => el.classList.remove("hover"));
+    if (act) root.querySelectorAll(`[data-act="${CSS.escape(act)}"]`).forEach((el) => el.classList.add("hover"));
+  }
+
+  function flash(act) {
+    root.querySelectorAll(`[data-act="${CSS.escape(act)}"]`).forEach((el) => {
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 220);
+    });
+  }
+
+  function recording(r) {
+    const ready = r.ready !== false;
+    levels.push(ready ? Math.max(0, Math.min(1, r.level || 0)) : 0);
+    levels.shift();
+    let el = root.querySelector(".status.rec");
+    if (!el) {
+      set(`<div class="status rec"><span class="dot"></span><span class="label"></span>` +
+          `<span class="time"></span><span class="meter">${levels.map(() => "<i></i>").join("")}</span>` +
+          `<span class="hint">${esc(r.hint || "release to insert · esc to cancel")}</span></div>`);
+      el = root.querySelector(".status.rec");
+    }
+    const label = ready ? "Listening" : "Opening the microphone…";
+    const lab = el.querySelector(".label");
+    if (lab.textContent !== label) { lab.textContent = label; post(); }
+    el.querySelector(".dot").classList.toggle("wait", !ready);
+    el.querySelector(".time").textContent = mmss(r.seconds || 0);
+    el.querySelectorAll(".meter i").forEach((bar, i) => { bar.style.height = `${2 + Math.round(levels[i] * 18)}px`; });
+  }
+
+  function processing(p) {
+    const sentence = p.text ? `<div class="line plain nofix noipa nohd">${wordsPlain(p.text)}</div>` : "";
+    set(`${sentence}<div class="status"><span class="spinner"></span><span class="label">${esc(p.step || "Working…")}</span>` +
+        (p.sub ? `<span class="sub">${esc(p.sub)}</span>` : "") + `</div>`);
+  }
+
+  function idle(m) {
+    set(`<div class="status idle"><span class="icon">🎙</span><span class="label">${esc(m.text)}</span>` +
+        (m.sub ? `<span class="sub">${esc(m.sub)}</span>` : "") + `</div>`, true);
+  }
+
+  function message(m) {
+    const icon = { warn: "⚠", error: "✕", info: "ℹ", ok: "✓" }[m.kind || "info"] || "ℹ";
+    set(`<div class="status ${esc(m.kind || "info")}"><span class="icon">${icon}</span>` +
+        `<span class="label">${esc(m.text)}</span>${m.sub ? `<span class="sub">${esc(m.sub)}</span>` : ""}</div>`);
+  }
+
+  function wordsPlain(text) {
+    return text.split(/\s+/).filter(Boolean).map((w) => `<span class="col"><span class="wd">${esc(w)}</span></span>`).join("");
+  }
+
+  /** Expected IPA in syllables (ˈkæl·kjʊ·ˌleɪ·ɾɚ), each sound coloured by what was heard. */
+  function ipaHtml(w, i) {
+    if (!w.ipa) return "";
+    const act = `data-act="m:${i}"`;
+    if (!w.ipa.length) return `<span class="ipa none">–</span>`;
+    if (w.form) return `<span class="ipa form" ${act}>${esc(w.form)}</span>`;
+    const starts = (w.syl && w.syl.length > 1) ? w.syl : [0];
+    const multi = starts.length > 1;
+    const n = w.ipa.length;
+    let html = "";
+    starts.forEach((a, k) => {
+      const b = k + 1 < starts.length ? starts[k + 1] : n;
+      const syl = w.ipa.slice(a, b);
+      const lv = Math.min(...syl.map((p) => p.st || 9));
+      if (k) html += `<span class="sep">·</span>`;
+      if (multi && lv === 1) html += `<span class="mk">ˈ</span>`;
+      else if (multi && lv === 2) html += `<span class="mk">ˌ</span>`;
+      html += syl.map((p) => `<i class="${p.s}${multi && lv === 1 ? " sts" : ""}">${esc(p.p)}</i>`).join("");
+    });
+    return `<span class="ipa" ${act}>${html}</span>`;
+  }
+
+  function bars(values, expected, cls) {
+    if (!values || values.length < 2) return "";
+    return `<span class="sbars ${cls}">${values.map((v, k) => (
+      `<i class="${k === expected ? "exp" : ""}${v == null ? " none" : ""}" style="height:${3 + Math.round(14 * (v || 0))}px"></i>`
+    )).join("")}</span>`;
+  }
+
+  function heardHtml(w) {
+    const parts = [];
+    if (w.heard && (w.sound === "warn" || w.sound === "bad")) parts.push(`<span>≈ ${esc(w.heard)}</span>`);
+    const s = w.stress;
+    if (s && s.prom) {
+      const cls = s.ok === false ? "bad" : s.ok === true ? "good" : "";
+      parts.push(bars(s.prom, s.expected, cls) + (s.model ? bars(s.model, s.expected, "model") : ""));
+      if (s.ok === false && s.said != null) parts.push(`<span class="bad">${ordinal(s.said + 1)} ✗</span>`);
+    }
+    return parts.join("");
+  }
+
+  function sentenceHtml(d) {
+    const words = d.words || [];
+    const showIpa = cfg.ipa !== "off" && words.some((w) => w.ipa);
+    const wantIpa = (w) => cfg.ipa === "all" || w.sound === "warn" || w.sound === "bad" || (w.stress && w.stress.ok === false);
+    const inserts = {};
+    (d.inserts || []).forEach((ins) => { (inserts[ins.before] = inserts[ins.before] || []).push(ins); });
+    const folded = cfg.folded;
+    let anyFix = !folded && (d.inserts || []).length > 0, anyHd = false;
+    const cols = [];
+    const insCol = (ins) => {
+      const sug = ins.severity !== "error" ? " sug" : "";
+      return `<span class="col ins${sug}"><span class="fix${sug}">${esc(ins.text)}</span><span class="wd">‸</span>` +
+             `<span class="ipa"> </span><span class="hd"></span></span>`;
+    };
+    words.forEach((w, i) => {
+      if (!folded) (inserts[i] || []).forEach((ins) => cols.push(insCol(ins)));
+      const cls = ["wd"];
+      let fix = "", fixSug = false;
+      (w.g || []).forEach((g) => {
+        const sug = g.severity !== "error";
+        if (g.op === "unnecessary") { cls.push("g-del"); if (!fix) fix = "✕"; }
+        else cls.push(sug ? "g-sug" : "g-err");
+        if (g.fix) { fix = g.fix; fixSug = sug; }
+      });
+      if (fix && !folded) anyFix = true;
+      if (w.sound === "warn") cls.push("s-warn");
+      if (w.sound === "bad") cls.push("s-bad");
+      if (w.fn) cls.push("fn");
+      if (w.filler) cls.push("filler");
+      const hd = folded ? "" : heardHtml(w);
+      if (hd) anyHd = true;
+      const act = w.t ? ` data-act="w:${i}"` : "";
+      const ipa = showIpa && wantIpa(w) ? ipaHtml(w, i) : `<span class="ipa"> </span>`;
+      cols.push(`<span class="col"><span class="fix${fixSug ? " sug" : ""}">${esc(fix) || " "}</span>` +
+                `<span class="${cls.join(" ")}"${act}>${esc(w.w)}</span>${ipa}<span class="hd">${hd}</span></span>`);
+    });
+    if (!folded) (inserts[words.length] || []).forEach((ins) => cols.push(insCol(ins)));
+    const lineCls = ["line", anyFix ? "" : "nofix", showIpa ? "" : "noipa", anyHd ? "" : "nohd"].join(" ");
+    return `<div class="${lineCls}">${cols.join("")}</div>`;
+  }
+
+  /** The coach's focus areas, as in Parrot Shadowing: what went wrong (with the tip), then what was fine. */
+  function coachHtml(d) {
+    const rows = d.coach || [];
+    const out = [];
+    let tips = 0;
+    rows.filter((r) => r.bad || (r.cat === "stress" && r.items.length)).forEach((r) => {
+      const unsure = !r.bad;
+      const items = r.items.map((it) => {
+        const a = it.t ? ` data-act="t:${it.t[0]}:${it.t[1]}"` : "";
+        const sb = it.prom ? bars(it.prom, it.exp, it.ok === false ? "bad" : "") + (it.model ? bars(it.model, it.exp, "model") : "") : "";
+        return `<span class="citem${it.ok === false ? "" : " unsure"}"${a}><span class="lbl">${esc(it.label)}</span>` +
+               `<span class="det">${esc(it.detail)}</span>${sb}</span>`;
+      }).join("");
+      out.push(`<div class="crow${r.focus ? " focus" : ""}${unsure ? " unsure" : ""}"><span class="ci">${unsure ? "?" : "✗"}</span>` +
+               `<b>${esc(r.label)}</b><span class="cn">${r.ok}/${r.ok + r.bad} ok</span>${items}</div>`);
+      if (r.tip && r.focus && tips < 2) { out.push(`<div class="tip">${esc(r.tip)}</div>`); tips += 1; }
+    });
+    const fine = rows.filter((r) => r.focus && !r.bad && r.ok && !(r.cat === "stress" && r.items.length));
+    if (fine.length) {
+      out.push(`<div class="fine"><span class="ci">✓</span>${fine.map((r) => `${esc(r.label)} ${r.ok}`).join(" · ")}</div>`);
+    }
+    return out.join("");
+  }
+
+  function grammarHtml(d) {
+    const issues = (d.issues || []).filter((it) => it.kind !== "sound");
+    const tag = { grammar: "grammar", suggestion: "style" };
+    const rows = issues.slice(0, cfg.maxGrammar).map((it) => (
+      `<div class="grow ${esc(it.kind)}"><span class="tag">${tag[it.kind] || it.kind}</span>` +
+      `<span class="lbl">${esc(it.label)}</span><span>${esc(it.text)}</span></div>`));
+    if (issues.length > cfg.maxGrammar) rows.push(`<div class="grow more">+ ${issues.length - cfg.maxGrammar} more</div>`);
+    return rows.join("");
+  }
+
+  function barHtml(d) {
+    const rec = d.rec || {};
+    const s = d.summary || {};
+    const meta = [];
+    if (s.sounds != null) meta.push(`<span class="${s.sounds >= 90 ? "good" : s.sounds < 70 ? "warn" : ""}">sounds ${s.sounds}%</span>`);
+    if (s.grammar != null && d.grammar_checked) meta.push(`<span class="${s.grammar ? "warn" : "good"}">grammar ${s.grammar ? `${s.grammar} error${s.grammar > 1 ? "s" : ""}` : "✓"}</span>`);
+    const m = d.meta || {};
+    if (m.inserted) meta.push(`<span>${esc(m.inserted)}</span>`);
+    if (d.sound_error) meta.push(`<span class="warn">sounds unavailable: ${esc(d.sound_error)}</span>`);
+    const btn = (act, label, on = true) => `<span class="btn${on ? "" : " off"}"${on ? ` data-act="${act}"` : ""}>${label}</span>`;
+    const parts = [];
+    if (rec.id) {
+      parts.push(btn("play:me", "▶ me"), btn("play:model", "▶ model", rec.voice !== false),
+                 btn("play:compare", "⇄ compare", rec.voice !== false));
+    }
+    parts.push(`<span class="meta">${meta.join("")}</span>`);
+    if (rec.id) {
+      parts.push(`<span class="nav">${rec.when ? esc(rec.when) + " · " : ""}` +
+                 `${btn("nav:prev", "‹", rec.index > 1)}${rec.index}/${rec.total}${btn("nav:next", "›", rec.index < rec.total)}</span>`);
+    }
+    const hasBars = !cfg.folded && (d.words || []).some((w) => w.stress && w.stress.prom);
+    const hint = "click a word to hear yourself, its IPA to hear the model" +
+      (hasBars ? " · bars: how strongly you stressed each syllable (grey: the model; outlined: the one to stress)" : "");
+    return `<div class="bar">${parts.join("")}</div>` +
+           (rec.id && rec.hint ? `<div class="bar"><span class="hint">${hint}</span></div>` : "");
+  }
+
+  function result(d) {
+    let html = sentenceHtml(d);
+    const errors = d.summary && d.summary.grammar > 0;
+    if (d.corrected_marks && d.corrected_marks.length && (errors || !cfg.folded)) {
+      html += `<div class="corrected"><span class="tick">✓</span>${d.corrected_marks.map((t) => (
+        t.c ? `<b>${esc(t.t)}</b>` : esc(t.t))).join(" ")}</div>`;
+    }
+    if (cfg.folded) {  // the mistake details are folded away; the sentence, its IPA, the correction and the buttons stay
+      set(html + barHtml(d), true, true);
+      return;
+    }
+    const notes = coachHtml(d) + grammarHtml(d);
+    if (notes) html += `<div class="notes">${notes}</div>`;
+    else if (d.analyzed) html += `<div class="notes"><div class="allgood">✓ No grammar or sound problems found</div></div>`;
+    html += barHtml(d);
+    set(html, true, true);
+  }
+
+  window.AI = { config, recording, processing, message, idle, result, hover, flash };
+  post();
+})();
+</script>
+</body>
+</html>
