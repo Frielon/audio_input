@@ -3,21 +3,34 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/Frielon/audio_input/main/install.sh | bash
 #
-# 1. the code, in ~/audio_input (git clone; without git, the archive of the main branch)
-# 2. conda: when there is none, Miniforge in ~/miniforge3 (shell settings are left alone)
-# 3. the conda env of environment.yml
-# 4. the models (about 6 GB, once): a sentence spoken by `say` is analysed, which also shows that it all works
+# Everything except the models goes into one folder, ~/audio_input:
+#   the code   a git clone (without git: the archive of the main branch)
+#   .uv/       uv (a small Python package manager), the Python 3.11 it downloads and its cache
+#   .venv/     the packages of requirements.txt (about 2 GB)
+# The models (about 6 GB) land in ~/.cache/huggingface while a sentence spoken by `say` is
+# analysed, which also shows that everything works.  Nothing else on the Mac is changed.
 #
-# Run it again to update.  Options go before `bash` (curl … | AUDIO_INPUT_DIR=~/apps/audio_input bash):
-#   AUDIO_INPUT_DIR    install folder (default ~/audio_input)
-#   CONDA_ENV_NAME     conda env (default audio-input; run.sh reads it too)
+# Run it again to update.  Run as ./install.sh in a clone, it sets up that clone as it is.
+#   AUDIO_INPUT_DIR    install folder (curl … | AUDIO_INPUT_DIR=~/apps/audio_input bash)
 #   AUDIO_INPUT_REPO   GitHub repository to install from (default Frielon/audio_input)
 set -euo pipefail
 
 REPO="${AUDIO_INPUT_REPO:-Frielon/audio_input}"
-INSTALL_DIR="${AUDIO_INPUT_DIR:-$HOME/audio_input}"
-ENV_NAME="${CONDA_ENV_NAME:-audio-input}"
 SAMPLE="Yesterday I meet my advisor, and he say we should use calculator."
+CHECKOUT=0  # 1: run from a clone, which is used as it is
+if [[ -n "${AUDIO_INPUT_DIR:-}" ]]; then
+  INSTALL_DIR="$AUDIO_INPUT_DIR"
+elif [[ -f "${BASH_SOURCE[0]:-}" && -f "$(dirname "${BASH_SOURCE[0]}")/audio_input/__main__.py" ]]; then
+  INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CHECKOUT=1
+else
+  INSTALL_DIR="$HOME/audio_input"
+fi
+case "$INSTALL_DIR" in /*) ;; *) INSTALL_DIR="$PWD/$INSTALL_DIR" ;; esac
+VENV="$INSTALL_DIR/.venv"
+UV="$INSTALL_DIR/.uv/bin/uv"
+# uv's Python and download cache stay in the install folder too: deleting the folder removes everything
+export UV_PYTHON_INSTALL_DIR="$INSTALL_DIR/.uv/python" UV_CACHE_DIR="$INSTALL_DIR/.uv/cache"
 
 step() { printf '\n\033[1;34m==>\033[0;1m %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -26,10 +39,15 @@ check_mac() {
   [[ "$(uname -s)" == Darwin ]] || die "audio_input runs on macOS only."
   [[ "$(sysctl -n hw.optional.arm64 2>/dev/null)" == 1 ]] || die "audio_input needs a Mac with Apple Silicon (M1 or newer)."
   [[ "$(uname -m)" == arm64 ]] || die "this terminal runs under Rosetta (x86_64); open a native one and try again."
+  # espeak-ng (the IPA) reads its data from inside .venv, and not from a path of 160 characters or more
+  local data="$VENV/lib/python3.11/site-packages/espeakng_loader/espeak-ng-data"
+  if (( ${#data} >= 160 )) && [[ -z "${ESPEAK_DATA_PATH:-}" ]]; then
+    die "the path $INSTALL_DIR is too long for espeak-ng; choose a folder whose path has at most $(( 159 - ${#data} + ${#INSTALL_DIR} )) characters (AUDIO_INPUT_DIR)."
+  fi
   local free_gb
   free_gb="$(df -g "$HOME" | awk 'NR == 2 {print $4}')"
   if [[ "$free_gb" =~ ^[0-9]+$ ]] && (( free_gb < 12 )); then
-    echo "warning: ${free_gb} GB free on disk; the env and the models take about 10 GB." >&2
+    echo "warning: ${free_gb} GB free on disk; the packages and the models take about 8 GB." >&2
   fi
 }
 
@@ -40,7 +58,9 @@ have_git() {  # without the Xcode Command Line Tools, /usr/bin/git only offers t
 }
 
 get_code() {
-  if [[ -d "$INSTALL_DIR/.git" ]]; then
+  if (( CHECKOUT )); then
+    step "Setting up the clone in $INSTALL_DIR"
+  elif [[ -d "$INSTALL_DIR/.git" ]]; then
     step "Updating the code in $INSTALL_DIR"
     git -C "$INSTALL_DIR" pull --ff-only
   elif [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" && ! -f "$INSTALL_DIR/audio_input/__main__.py" ]]; then
@@ -55,43 +75,21 @@ get_code() {
   fi
 }
 
-find_conda() {  # the same places run.sh looks
-  local c
-  for c in "${CONDA_EXE:-}" "$(command -v conda || true)" \
-           "$HOME"/{miniforge3,mambaforge,miniconda3,anaconda3}/bin/conda \
-           /opt/homebrew/Caskroom/{miniforge,miniconda}/base/bin/conda /opt/{miniconda3,anaconda3}/bin/conda; do
-    if [[ -n "$c" && -x "$c" ]]; then
-      echo "$c"
-      return 0
-    fi
-  done
-  return 1
-}
-
-get_conda() {
-  if CONDA="$(find_conda)"; then
-    step "Using conda at $CONDA"
-    return
-  fi
-  step "Installing Miniforge (conda) into ~/miniforge3"
-  local tmp
-  tmp="$(mktemp -d)"
-  curl -fsSL -o "$tmp/miniforge.sh" \
-    https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
-  bash "$tmp/miniforge.sh" -b -u -p "$HOME/miniforge3"
-  rm -rf "$tmp"
-  CONDA="$HOME/miniforge3/bin/conda"
+get_uv() {
+  [[ -x "$UV" ]] && return
+  step "Downloading uv, the Python package manager (about 30 MB)"
+  mkdir -p "$(dirname "$UV")"
+  curl -fsSL https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz |
+    tar -xz --strip-components 1 -C "$(dirname "$UV")"
 }
 
 make_env() {
-  cd "$INSTALL_DIR"
-  if "$CONDA" env list | awk -v name="$ENV_NAME" '$1 == name {found = 1} END {exit !found}'; then
-    step "Updating the conda env $ENV_NAME"
-    "$CONDA" env update -n "$ENV_NAME" -f environment.yml
-  else
-    step "Creating the conda env $ENV_NAME (Python 3.11 and about 2 GB of packages)"
-    "$CONDA" env create -n "$ENV_NAME" -f environment.yml
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    step "Creating the Python 3.11 environment in $VENV"
+    "$UV" venv --clear --managed-python --python 3.11 "$VENV"
   fi
+  step "Installing the packages of requirements.txt (about 2 GB the first time)"
+  "$UV" pip install --python "$VENV/bin/python" -r "$INSTALL_DIR/requirements.txt"
 }
 
 try_it() {
@@ -99,20 +97,19 @@ try_it() {
   local tmp
   tmp="$(mktemp -d)"
   say -v Samantha -o "$tmp/sample.aiff" "$SAMPLE" 2>/dev/null || say -o "$tmp/sample.aiff" "$SAMPLE"
-  CONDA_EXE="$CONDA" CONDA_ENV_NAME="$ENV_NAME" "$INSTALL_DIR/run.sh" --file "$tmp/sample.aiff"
+  "$INSTALL_DIR/run.sh" --file "$tmp/sample.aiff"
   rm -rf "$tmp"
 }
 
 done_msg() {
-  local dir="$INSTALL_DIR" env_prefix=""
+  local dir="$INSTALL_DIR"
   case "$dir" in "$HOME"/*) dir="~${dir#"$HOME"}" ;; esac
-  [[ "$ENV_NAME" == audio-input ]] || env_prefix="CONDA_ENV_NAME=$ENV_NAME "
   step "Done: audio_input is installed in $dir"
   cat <<EOF
 
 Start it from a Terminal window you keep open while you use it:
 
-    $env_prefix$dir/run.sh
+    $dir/run.sh
 
 The first time, macOS asks for permissions for the app you start it from (Terminal, iTerm …):
 turn on Accessibility, Input Monitoring and Microphone in System Settings → Privacy & Security,
@@ -126,12 +123,12 @@ EOF
 main() {
   check_mac
   get_code
-  get_conda
+  get_uv
   make_env
   try_it
   done_msg
 }
 
-# Everything above only defines functions, so a download cut short runs nothing; stdin is the
-# script itself under `curl | bash`, so no step may read it.
+# Nothing above has an effect before this line, so a download cut short does nothing; under
+# `curl | bash` stdin is the script itself, so no step may read it.
 main "$@" </dev/null

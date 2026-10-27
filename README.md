@@ -50,17 +50,19 @@ On a Mac with Apple Silicon (M1 or newer), paste this line into Terminal:
 curl -fsSL https://raw.githubusercontent.com/Frielon/audio_input/main/install.sh | bash
 ```
 
-It asks nothing and takes 10–30 minutes, mostly downloads. It sets up:
+It asks nothing and takes 5–20 minutes, mostly downloads. Everything goes into
+one folder, `~/audio_input`:
 
-- the code, in `~/audio_input` (cloned with git, or downloaded as an archive
-  when git is missing);
-- conda, only if there is none: Miniforge in `~/miniforge3` (your shell
-  settings are left alone);
-- the `audio-input` conda env of `environment.yml` (Python 3.11, about 2 GB);
-- the models from Hugging Face, cached in `~/.cache/huggingface` (Whisper
-  large-v3-turbo for MLX ≈ 1.6 GB, the grammar model ≈ 3 GB, the phoneme model
-  ≈ 1.3 GB): it analyses a sentence spoken by `say` and prints the feedback, so
-  you see that everything works.
+- the code (cloned with git, or downloaded as an archive when git is missing);
+- `.uv/`: [uv](https://docs.astral.sh/uv/), a small Python package manager, and
+  the Python 3.11 it downloads;
+- `.venv/`: the packages of `requirements.txt` (about 2 GB).
+
+Then it fetches the models from Hugging Face into `~/.cache/huggingface`
+(Whisper large-v3-turbo for MLX ≈ 1.6 GB, the grammar model ≈ 3 GB, the phoneme
+model ≈ 1.3 GB) by analysing a sentence spoken by `say`, and prints the
+feedback, so you see that everything works. Nothing else on your Mac is
+changed (no conda, no Homebrew, no shell settings).
 
 Then start it from a Terminal window you keep open:
 
@@ -68,29 +70,21 @@ Then start it from a Terminal window you keep open:
 ~/audio_input/run.sh
 ```
 
-Run the install line again to update (your `config.toml` and `data/` stay). To
-install elsewhere or under another env name:
-`curl … | AUDIO_INPUT_DIR=~/apps/audio_input CONDA_ENV_NAME=dictation bash`, then
-start it with `CONDA_ENV_NAME=dictation ~/apps/audio_input/run.sh`.
+Run the install line again to update (your `config.toml` and `data/` stay).
+`curl … | AUDIO_INPUT_DIR=~/apps/audio_input bash` installs elsewhere, and in a
+clone of this repository `./install.sh` sets up that clone.
 
-By hand, with conda already installed:
-
-```bash
-git clone https://github.com/Frielon/audio_input.git && cd audio_input
-conda env create -f environment.yml      # the "audio-input" env (python 3.11)
-./run.sh                                 # or: conda activate audio-input && python -m audio_input
-```
-
-The models are then downloaded on the first start. Once cached, they load in
-about 10 s; dictation works as soon as Whisper is ready (the menu-bar icon
-turns from ⌛ into a microphone).
+With conda instead: `conda env create -f environment.yml`, then `./run.sh` (it
+uses `.venv` when there is one, otherwise the `audio-input` conda env); the
+models are then downloaded on the first start. Once cached, they load in about
+10 s; dictation works as soon as Whisper is ready (the menu-bar icon turns from
+⌛ into a microphone).
 
 The sound analysis (phonemes, stress, the coach's checks) is that of **Parrot
 Shadowing**, a shadowing-practice app by the same author. Its modules are
 bundled in `audio_input/parrot_backend`, so nothing else is needed.
 
-**Uninstall:** `rm -rf ~/audio_input`, `conda env remove -n audio-input`
-(and `rm -rf ~/miniforge3` if the installer put it there), and the models in
+**Uninstall:** `rm -rf ~/audio_input`, and the models in
 `~/.cache/huggingface/hub`: `models--mlx-community--whisper-large-v3-turbo`,
 `models--grammarly--coedit-large` and `models--facebook--wav2vec2-lv-60-espeak-cv-ft`.
 
@@ -256,7 +250,8 @@ audio_input/
   history.py      data/history.jsonl
   report.py       practice report (text / HTML)
 tests/            pytest; test_pipeline_slow.py runs the real models (AUDIO_INPUT_SLOW_TESTS=1)
-install.sh        the one-line installer: the code, conda, the env, the models
+install.sh        the one-line installer: the code, uv + Python 3.11, .venv, the models
+requirements.txt  the Python packages (install.sh: .venv; environment.yml: a conda env)
 scripts/          sync_parrot.sh copies the Parrot Shadowing modules again after a change there
 ```
 
@@ -272,10 +267,11 @@ scripts/          sync_parrot.sh copies the Parrot Shadowing modules again after
 ## Tests
 
 ```bash
-conda activate audio-input
-python -m pytest                                   # unit tests, ~3 s, no models
-AUDIO_INPUT_SLOW_TESTS=1 python -m pytest          # + the models on speech synthesized with `say`
+.venv/bin/python -m pytest                         # unit tests, ~3 s, no models
+AUDIO_INPUT_SLOW_TESTS=1 .venv/bin/python -m pytest  # + the models on speech synthesized with `say`
 ```
+
+(With conda: `conda activate audio-input`, then `python -m pytest`.)
 
 The unit tests never touch your clipboard or keyboard (they use a private
 pasteboard).

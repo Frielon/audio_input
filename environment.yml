@@ -1,32 +1,9 @@
+# With conda instead of install.sh: conda env create -f environment.yml, then ./run.sh
 name: audio-input
 channels:
   - conda-forge
-  - nodefaults   # no Anaconda channels: their terms-of-service prompt would stop an unattended install
 dependencies:
   - python=3.11
-  - ffmpeg
   - pip
   - pip:
-      # speech -> text: Whisper large-v3-turbo on the Apple GPU (Apple Silicon only), faster-whisper on the CPU
-      - mlx-whisper>=0.4
-      - faster-whisper>=1.1
-      # sound-level (IPA) feedback: the phoneme stack of the bundled Parrot Shadowing analysis
-      - torch>=2.2
-      - transformers>=4.40
-      - phonemizer>=3.2
-      - espeakng-loader>=0.2
-      - sentencepiece>=0.2      # T5 tokenizer of the grammar model
-      # grammar: edit extraction and error types
-      - spacy>=3.7
-      - errant>=3.0
-      - en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-      # macOS: global hotkey, text insertion, menu bar + floating overlay
-      - pyobjc-core>=10.3
-      - pyobjc-framework-Cocoa>=10.3
-      - pyobjc-framework-Quartz>=10.3
-      - pyobjc-framework-WebKit>=10.3
-      - pyobjc-framework-ApplicationServices>=10.3
-      # microphone
-      - sounddevice>=0.4.7
-      - numpy
-      - pytest>=8
+      - -r requirements.txt

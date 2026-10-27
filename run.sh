@@ -5,23 +5,22 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+if [[ -x .venv/bin/python ]]; then  # made by install.sh
+  exec .venv/bin/python -m audio_input "$@"
+fi
+
+# otherwise the conda env of environment.yml
 ENV_NAME="${CONDA_ENV_NAME:-audio-input}"
 
 if [[ "$(basename "${CONDA_PREFIX:-}")" != "$ENV_NAME" ]]; then
-  # conda from the shell, else where install.sh (Miniforge) or the usual installers put it
-  for conda_exe in "${CONDA_EXE:-}" "$(command -v conda || true)" \
-                   "$HOME"/{miniforge3,mambaforge,miniconda3,anaconda3}/bin/conda \
-                   /opt/homebrew/Caskroom/{miniforge,miniconda}/base/bin/conda /opt/{miniconda3,anaconda3}/bin/conda; do
-    [[ -n "$conda_exe" && -x "$conda_exe" ]] && break
-  done
-  if [[ ! -x "$conda_exe" ]]; then
-    echo "conda not found; install everything with:" >&2
-    echo "  curl -fsSL https://raw.githubusercontent.com/Frielon/audio_input/main/install.sh | bash" >&2
+  if [[ -x "$(command -v conda)" ]]; then
+    # shellcheck disable=SC1091
+    eval "$(conda shell.bash hook)"
+    conda activate "$ENV_NAME"
+  else
+    echo "No Python environment yet: run ./install.sh (or: conda env create -f environment.yml)" >&2
     exit 1
   fi
-  # shellcheck disable=SC1091
-  eval "$("$conda_exe" shell.bash hook)"
-  conda activate "$ENV_NAME"
 fi
 
 exec python -m audio_input "$@"
