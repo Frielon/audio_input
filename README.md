@@ -41,6 +41,23 @@ Everything runs on your Mac (Apple Silicon); nothing is sent anywhere.
 (`~word~`: wavy underline; IPA sounds are coloured green / amber / red; under
 longer words, stress bars: yours and the model's.)
 
+## Models and credits
+
+audio_input is built on these open models and tools; many thanks to their
+authors for releasing them. All of them run on your Mac (the Whisper, wav2vec2
+and CoEdIT weights are downloaded once from Hugging Face).
+
+| Model / tool | By | Used for | Licence |
+| --- | --- | --- | --- |
+| [Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) ([paper](https://arxiv.org/abs/2212.04356)), in its [MLX conversion](https://huggingface.co/mlx-community/whisper-large-v3-turbo) | OpenAI; conversion by the MLX Community | speech to text on the Apple GPU | MIT |
+| [Whisper small.en](https://huggingface.co/Systran/faster-whisper-small.en) for [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (`whisper_backend = "faster"`) | OpenAI; conversion by SYSTRAN | speech to text on the CPU | MIT |
+| [Silero VAD](https://github.com/snakers4/silero-vad) (v6, shipped with faster-whisper) | Silero Team | cutting the recording down to the speech | MIT |
+| [wav2vec2-lv-60-espeak-cv-ft](https://huggingface.co/facebook/wav2vec2-lv-60-espeak-cv-ft) ([paper](https://arxiv.org/abs/2109.11680)) | Qiantong Xu, Alexei Baevski, Michael Auli (Meta AI) | the sounds you made, as IPA | Apache 2.0 |
+| [CoEdIT-large](https://huggingface.co/grammarly/coedit-large) ([paper](https://arxiv.org/abs/2305.09857)), fine-tuned from [Flan-T5-large](https://huggingface.co/google/flan-t5-large) | Vipul Raheja, Dhruv Kumar, Ryan Koo, Dongyeop Kang (Grammarly) | grammar correction | CC BY-NC 4.0 (non-commercial use only) |
+| [spaCy en_core_web_sm](https://spacy.io/models/en#en_core_web_sm) | Explosion | parsing the sentences for ERRANT | MIT |
+| [ERRANT](https://github.com/chrisjbryant/errant) ([paper](https://aclanthology.org/P17-1074/)) | Christopher Bryant, Mariano Felice, Ted Briscoe | finding and labelling the grammar edits | MIT |
+| [eSpeak NG](https://github.com/espeak-ng/espeak-ng), through [phonemizer](https://github.com/bootphon/phonemizer) | the eSpeak NG and phonemizer contributors | the expected IPA and stress of every word | GPL-3.0 |
+
 ## Install
 
 On a Mac with Apple Silicon (M1 or newer), paste this line into Terminal:
@@ -247,23 +264,6 @@ tests/            pytest; test_pipeline_slow.py runs the real models (AUDIO_INPU
 install.sh        the one-line installer: the code, uv + Python 3.11, .venv, the models
 requirements.txt  the Python packages (install.sh: .venv; environment.yml: a conda env)
 ```
-
-## Models and credits
-
-audio_input is built on these open models and tools; many thanks to their
-authors for releasing them. All of them run on your Mac (the Whisper, wav2vec2
-and CoEdIT weights are downloaded from Hugging Face on the first start).
-
-| Model / tool | By | Used for | Licence |
-| --- | --- | --- | --- |
-| [Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) ([paper](https://arxiv.org/abs/2212.04356)), in its [MLX conversion](https://huggingface.co/mlx-community/whisper-large-v3-turbo) | OpenAI; conversion by the MLX Community | speech to text on the Apple GPU | MIT |
-| [Whisper small.en](https://huggingface.co/Systran/faster-whisper-small.en) for [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (`whisper_backend = "faster"`) | OpenAI; conversion by SYSTRAN | speech to text on the CPU | MIT |
-| [Silero VAD](https://github.com/snakers4/silero-vad) (v6, shipped with faster-whisper) | Silero Team | cutting the recording down to the speech | MIT |
-| [wav2vec2-lv-60-espeak-cv-ft](https://huggingface.co/facebook/wav2vec2-lv-60-espeak-cv-ft) ([paper](https://arxiv.org/abs/2109.11680)) | Qiantong Xu, Alexei Baevski, Michael Auli (Meta AI) | the sounds you made, as IPA | Apache 2.0 |
-| [CoEdIT-large](https://huggingface.co/grammarly/coedit-large) ([paper](https://arxiv.org/abs/2305.09857)), fine-tuned from [Flan-T5-large](https://huggingface.co/google/flan-t5-large) | Vipul Raheja, Dhruv Kumar, Ryan Koo, Dongyeop Kang (Grammarly) | grammar correction | CC BY-NC 4.0 (non-commercial use only) |
-| [spaCy en_core_web_sm](https://spacy.io/models/en#en_core_web_sm) | Explosion | parsing the sentences for ERRANT | MIT |
-| [ERRANT](https://github.com/chrisjbryant/errant) ([paper](https://aclanthology.org/P17-1074/)) | Christopher Bryant, Mariano Felice, Ted Briscoe | finding and labelling the grammar edits | MIT |
-| [eSpeak NG](https://github.com/espeak-ng/espeak-ng), through [phonemizer](https://github.com/bootphon/phonemizer) | the eSpeak NG and phonemizer contributors | the expected IPA and stress of every word | GPL-3.0 |
 
 ## Tests
 
