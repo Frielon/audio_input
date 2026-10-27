@@ -6,12 +6,11 @@ in a music app, shows the sentence you said with:
 
 - **sounds**: the expected IPA under every word, in syllables with the stress
   mark (ˈkæl·kjʊ·ˌleɪ·ɾɚ), each sound green (heard), amber (another sound was
-  heard; what was heard is shown below) or red (not heard), as in the Sounds
-  panel of Parrot Shadowing;
+  heard; what was heard is shown below) or red (not heard);
 - **syllable stress**: for every longer word, bars for how strongly you
   stressed each syllable, next to the model voice's bars, with the syllable to
   stress outlined;
-- **your focus points**: the Parrot Shadowing coach's checks, grouped by area
+- **your focus points**: a pronunciation coach's checks, grouped by area
   with your weak areas first (final consonants, TH, /r/, /s/–/z/, word stress):
   what went wrong ("think: sounded like /t/ – “tink”"), the teacher's tip, and
   the areas that were fine; then extra "uh", reduced small words, pauses,
@@ -80,10 +79,6 @@ models are then downloaded on the first start. Once cached, they load in about
 10 s; dictation works as soon as Whisper is ready (the menu-bar icon turns from
 ⌛ into a microphone).
 
-The sound analysis (phonemes, stress, the coach's checks) is that of **Parrot
-Shadowing**, a shadowing-practice app by the same author. Its modules are
-bundled in `audio_input/parrot_backend`, so nothing else is needed.
-
 **Uninstall:** `rm -rf ~/audio_input`, and the models in
 `~/.cache/huggingface/hub`: `models--mlx-community--whisper-large-v3-turbo`,
 `models--grammarly--coedit-large` and `models--facebook--wav2vec2-lv-60-espeak-cv-ft`.
@@ -147,8 +142,8 @@ after a restart). In the overlay:
   menu-bar icon's *Recent recordings*); the overlay stays while the mouse is on
   it.
 
-The model voice is analysed like the speaker in Parrot Shadowing, so its
-syllable stress appears as grey bars next to yours.
+The model voice is analysed like a reference speaker, so its syllable stress
+appears as grey bars next to yours.
 
 The **menu-bar icon** (🎙) shows the state (red while listening) and has: *Show
 the overlay*, *Recent recordings*, *Insert the corrected sentence* (insert the
@@ -162,8 +157,7 @@ Every utterance and its feedback is appended to `data/history.jsonl`.
 *Practice report* (or `python -m audio_input.report`, `--html`, `--days 7`)
 counts what keeps coming back: grammar error types with examples, the share of
 passed checks per focus area, words that keep coming out unclear, and a
-**practice text** of corrected sentences, ready to paste into Parrot
-Shadowing's *✎ My text*, so you can shadow the model voice.
+**practice text** of corrected sentences to read aloud.
 
 ### Command line
 
@@ -212,7 +206,7 @@ key down ─> microphone (16 kHz) ─> key up
    │    with a spoken-style prompt, so your grammar and fillers are written as said
    ├─ insert at the cursor (clipboard + Cmd+V, then the clipboard is restored)
    └─ feedback, in parallel                                     ~0.3 s
-        ├─ sounds: parrot_backend.analysis (Parrot Shadowing) — wav2vec2 phoneme recognizer
+        ├─ sounds: wav2vec2 phoneme recognizer (facebook/wav2vec2-lv-60-espeak-cv-ft)
         │    vs espeak IPA of the transcript, stress, rhythm, the coach's checks
         └─ grammar: CoEdIT (grammarly/coedit-large, Apple GPU, beam search) corrects each
              sentence, the most minimal plausible correction is kept, ERRANT extracts and
@@ -220,7 +214,7 @@ key down ─> microphone (16 kHz) ─> key up
              Whisper's, not yours)
    ─> overlay (WKWebView in a non-activating panel), data/recent (last 10), data/history.jsonl
    └─ then, in the background: the model voice (macOS `say`) reads the corrected sentence and
-        is analysed like parrot's reference speaker -> its stress bars, ▶ model, ⇄ compare
+        is analysed as the reference speaker -> its stress bars, ▶ model, ⇄ compare
 ```
 
 Dictation has no target sentence, so the transcript stands in for it: the
@@ -237,8 +231,8 @@ audio_input/
   recorder.py     microphone capture (sounddevice), opened only while the key is held
   speech.py       VAD trimming + Whisper (mlx-whisper or faster-whisper) with word timings
   inserter.py     paste with clipboard restore / typing, smart spacing (Accessibility API), filler removal
-  parrot.py       bridge to the bundled Parrot Shadowing analysis (phonemes, stress, coach)
-  parrot_backend/ Parrot Shadowing's backend modules, copied unchanged
+  parrot.py       the sound analysis as the app calls it (phonemes, stress, coach)
+  parrot_backend/ phoneme recognizer, alignment with the expected IPA, stress, rhythm, coach
   grammar.py      CoEdIT correction + ERRANT edit extraction, labels and filtering
   feedback.py     transcript + sounds + grammar -> what the overlay shows
   pipeline.py     Engine: transcribe, then sounds and grammar side by side; the model voice's analysis
@@ -252,17 +246,24 @@ audio_input/
 tests/            pytest; test_pipeline_slow.py runs the real models (AUDIO_INPUT_SLOW_TESTS=1)
 install.sh        the one-line installer: the code, uv + Python 3.11, .venv, the models
 requirements.txt  the Python packages (install.sh: .venv; environment.yml: a conda env)
-scripts/          sync_parrot.sh copies the Parrot Shadowing modules again after a change there
 ```
 
-## Models
+## Models and credits
 
-| Model | Used for | Licence |
-| --- | --- | --- |
-| `mlx-community/whisper-large-v3-turbo` (or faster-whisper `small.en`) | speech to text | MIT |
-| `facebook/wav2vec2-lv-60-espeak-cv-ft` (via Parrot Shadowing) | the sounds you made, as IPA | Apache 2.0 |
-| `grammarly/coedit-large` | grammar correction | CC BY-NC 4.0 (non-commercial use) |
-| ERRANT + spaCy `en_core_web_sm` | grammar edit types | MIT |
+audio_input is built on these open models and tools; many thanks to their
+authors for releasing them. All of them run on your Mac (the Whisper, wav2vec2
+and CoEdIT weights are downloaded from Hugging Face on the first start).
+
+| Model / tool | By | Used for | Licence |
+| --- | --- | --- | --- |
+| [Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) ([paper](https://arxiv.org/abs/2212.04356)), in its [MLX conversion](https://huggingface.co/mlx-community/whisper-large-v3-turbo) | OpenAI; conversion by the MLX Community | speech to text on the Apple GPU | MIT |
+| [Whisper small.en](https://huggingface.co/Systran/faster-whisper-small.en) for [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (`whisper_backend = "faster"`) | OpenAI; conversion by SYSTRAN | speech to text on the CPU | MIT |
+| [Silero VAD](https://github.com/snakers4/silero-vad) (v6, shipped with faster-whisper) | Silero Team | cutting the recording down to the speech | MIT |
+| [wav2vec2-lv-60-espeak-cv-ft](https://huggingface.co/facebook/wav2vec2-lv-60-espeak-cv-ft) ([paper](https://arxiv.org/abs/2109.11680)) | Qiantong Xu, Alexei Baevski, Michael Auli (Meta AI) | the sounds you made, as IPA | Apache 2.0 |
+| [CoEdIT-large](https://huggingface.co/grammarly/coedit-large) ([paper](https://arxiv.org/abs/2305.09857)), fine-tuned from [Flan-T5-large](https://huggingface.co/google/flan-t5-large) | Vipul Raheja, Dhruv Kumar, Ryan Koo, Dongyeop Kang (Grammarly) | grammar correction | CC BY-NC 4.0 (non-commercial use only) |
+| [spaCy en_core_web_sm](https://spacy.io/models/en#en_core_web_sm) | Explosion | parsing the sentences for ERRANT | MIT |
+| [ERRANT](https://github.com/chrisjbryant/errant) ([paper](https://aclanthology.org/P17-1074/)) | Christopher Bryant, Mariano Felice, Ted Briscoe | finding and labelling the grammar edits | MIT |
+| [eSpeak NG](https://github.com/espeak-ng/espeak-ng), through [phonemizer](https://github.com/bootphon/phonemizer) | the eSpeak NG and phonemizer contributors | the expected IPA and stress of every word | GPL-3.0 |
 
 ## Tests
 
@@ -283,8 +284,7 @@ pasteboard).
   two versions sound almost the same it may write the correct one: *ask me*
   and *asked me* differ only by a /t/ that is often silent. The sound feedback
   then still shows the missing /t/ under *asked*.
-- **The phoneme recognizer** is the one of Parrot Shadowing, with the same
-  strengths and limits: it was trained on dictionary pronunciations and can
+- **The phoneme recognizer** was trained on dictionary pronunciations and can
   "hear" the expected sound of a common word in context. Treat a single amber
   sound as a hint and a sound that keeps coming back in the practice report as
   the thing to practise.
@@ -308,5 +308,5 @@ pasteboard).
 ## Licence
 
 The code is under the MIT licence ([LICENSE](LICENSE)). The models have their
-own licences (see [Models](#models)); `grammarly/coedit-large` is CC BY-NC 4.0,
-for non-commercial use only.
+own licences (see [Models and credits](#models-and-credits));
+`grammarly/coedit-large` is CC BY-NC 4.0, for non-commercial use only.
