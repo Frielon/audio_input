@@ -25,21 +25,9 @@ in a music app, shows the sentence you said with:
 
 Everything runs on your Mac (Apple Silicon); nothing is sent anywhere.
 
-```
-                  met                         said                   a
-  Yesterday  I  ~meet~  my  advisor,  and he  ~say~  we should use  ‸  calculator
-  jˈɛstɚdˌeɪ aɪ  mˈiːt   maɪ ɐdvˈaɪzɚ  ænd hiː sˈeɪ   wiː ʃʊd  jˈuːz     kˈælkjʊlˌeɪɾɚ
-                            ≈ ædvaɪzɚ
-  ✓ Yesterday I met my advisor, and he said we should use a calculator.
-  ✗ TH sounds 3/4 ok   think  sounded like /t/ – “tink”
-     💡 Tongue tip between the teeth and blow …
-  ✓ Final consonants 5 · /r/ 4 · /s/ vs /z/ 1 · Word stress 3
-  GRAMMAR  verb tense “meet” → “met”
-  GRAMMAR  article    add “a”
-  [▶ me] [▶ model] [⇄ compare]  sounds 97% · grammar 3 errors      13:41 · Slack  ‹ 9/10 ›
-```
-(`~word~`: wavy underline; IPA sounds are coloured green / amber / red; under
-longer words, stress bars: yours and the model's.)
+![The overlay: the sentence with its IPA, stress bars and grammar fixes, the corrected sentence, the focus points with tips, the grammar notes and the replay buttons](docs/overlay.png)
+
+(A sentence spoken by `say`, with mistakes put in on purpose.)
 
 ## Models and credits
 
