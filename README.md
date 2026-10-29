@@ -186,7 +186,7 @@ The most useful ones:
 | --- | --- | --- |
 | `hotkey` | `left_option` | `right_option`, `right_command`, `right_control`, `fn` (set *Keyboard → Press 🌐 key to* to *Do Nothing*), `f13`…`f20`, `keycode:<n>` |
 | `start_delay` | `0.25` | seconds the key must be held alone before the microphone opens (`0`: at once) |
-| `input_device` | system default | microphone name or index (`--list-devices`) |
+| `input_device` | the macOS default | microphone name or index (`--list-devices`); unset, every dictation uses the macOS default microphone of that moment, also after you change it |
 | `insert` | `paste` | `paste`: clipboard + Cmd+V, your clipboard is put back after 0.5 s; `type`: key events (clipboard untouched); `none` |
 | `insert_text` | `transcript` | `corrected`: insert the grammar-corrected sentence (waits for the check) |
 | `vocabulary` | `[]` | names and terms Whisper should know, e.g. `["Adam", "PyTorch", "Berkeley"]` |
@@ -280,8 +280,9 @@ pasteboard).
   manager or Terminal's *Secure Keyboard Entry* is active) macOS hides the
   keyboard from all apps, so the key does nothing.
 - **Bluetooth headsets** need about a second to switch to their microphone.
-  Start speaking when the overlay says *Listening*, or choose a wired or
-  built-in microphone with `input_device`.
+  Start speaking when the overlay says *Listening*, or use another
+  microphone: choose it as the input in System Settings → Sound (audio_input
+  follows it, no restart needed), or set `input_device`.
 - **Keyboard layouts:** Cmd+V is sent as the key in the V position of a US
   layout. With Dvorak or Colemak use the "… – QWERTY ⌘" variant of the layout,
   or `insert = "type"`.

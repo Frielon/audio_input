@@ -8,6 +8,7 @@ start_delay = 0.25             # held alone this long before the microphone open
 min_seconds = 0.5              # shorter holds are ignored
 max_seconds = 120              # the recording stops by itself after this long
 # input_device = "Logitech BRIO"   # microphone name (or part of it) or index: python -m audio_input --list-devices
+                                   # (unset: the macOS default microphone, also after you change it)
 
 # --- putting the text where the cursor is --------------------------------
 insert = "paste"               # paste (clipboard + Cmd+V, clipboard restored) | type (key events) | none

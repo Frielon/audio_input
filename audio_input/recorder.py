@@ -6,6 +6,12 @@ profile, so start speaking once the overlay says "Listening").  Keeping the
 microphone closed in between means the orange microphone indicator only shows
 while you dictate.
 
+Without ``input_device`` every recording uses the microphone that is the macOS
+default at that moment.  PortAudio reads the devices only once, when
+sounddevice is imported, so it is restarted (about 3 ms) before the stream is
+opened; a restart frees every stream still open, so it happens under
+``PORTAUDIO_LOCK``, which playback (player.py) holds too.
+
 ``AUDIO_INPUT_FAKE_MIC=/path/to/file.wav`` replaces the microphone with that
 recording (for tests).
 """
@@ -22,6 +28,17 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 SR = 16000
+# Held while PortAudio is restarted (Recorder.start) and around playback (player.py): a restart frees every
+# stream that is still open, so no other thread may open one meanwhile.
+PORTAUDIO_LOCK = threading.Lock()
+
+
+def _restart_portaudio(sd) -> None:
+    """Make PortAudio read the devices and the macOS default microphone again (call with PORTAUDIO_LOCK held)."""
+    sd.stop()  # playback: a restart would free its stream under sounddevice
+    if getattr(sd, "_initialized", 1):  # (not after a restart that failed)
+        sd._terminate()
+    sd._initialize()
 
 
 def input_devices() -> list[dict]:
@@ -79,6 +96,7 @@ class Recorder:
         self._t0 = 0.0
         self._level = 0.0
         self._live_at: Optional[float] = None
+        self._mic_name: Optional[str] = None  # the microphone of the last recording (logged when it changes)
         self.recording = False
         self.silent = False  # the last recording was digital silence (muted, lid closed, no permission)
 
@@ -103,8 +121,9 @@ class Recorder:
 
         if self.fake:
             return f"file {os.path.basename(self.fake)}"
-        idx = self.device if self.device is not None else sd.default.device[0]
-        return sd.query_devices(idx)["name"]
+        with PORTAUDIO_LOCK:
+            idx = self.device if self.device is not None else sd.default.device[0]
+            return sd.query_devices(idx)["name"]
 
     def _callback(self, indata, frames, time_info, status) -> None:
         block = indata[:, 0].copy()
@@ -129,17 +148,23 @@ class Recorder:
             return
         import sounddevice as sd
 
-        try:
-            self._sr = SR
-            self._stream = sd.InputStream(device=self.device, samplerate=SR, channels=1, dtype="float32",
-                                          callback=self._callback)
-        except sd.PortAudioError:  # the device cannot do 16 kHz itself: record at its own rate
-            self._sr = int(sd.query_devices(self.device if self.device is not None else sd.default.device[0])
-                           ["default_samplerate"])
-            self._stream = sd.InputStream(device=self.device, samplerate=self._sr, channels=1, dtype="float32",
-                                          callback=self._callback)
-        self._stream.start()
+        with PORTAUDIO_LOCK:
+            if self.device is None:  # the system default: the microphone macOS uses now, not the one at startup
+                _restart_portaudio(sd)
+            info = sd.query_devices(self.device if self.device is not None else sd.default.device[0])
+            try:
+                self._sr = SR
+                self._stream = sd.InputStream(device=self.device, samplerate=SR, channels=1, dtype="float32",
+                                              callback=self._callback)
+            except sd.PortAudioError:  # the device cannot do 16 kHz itself: record at its own rate
+                self._sr = int(info["default_samplerate"])
+                self._stream = sd.InputStream(device=self.device, samplerate=self._sr, channels=1, dtype="float32",
+                                              callback=self._callback)
+            self._stream.start()
         self.recording = True
+        if info["name"] != self._mic_name:
+            log.info("Microphone: %s", info["name"])
+            self._mic_name = info["name"]
 
     def _close(self) -> None:
         stream, self._stream = self._stream, None

@@ -1,6 +1,8 @@
 """Recorder helpers and speech trimming (Silero VAD; no Whisper model needed)."""
 import shutil
 import subprocess
+import sys
+import types
 
 import numpy as np
 import pytest
@@ -27,6 +29,74 @@ def test_resolve_device(monkeypatch):
     assert recorder.resolve_device("5") == 5
     with pytest.raises(ValueError):
         recorder.resolve_device("AirPods")
+
+
+class FakeSoundDevice:
+    """Just enough of sounddevice to see what Recorder.start() asks of PortAudio."""
+
+    class PortAudioError(Exception):
+        pass
+
+    def __init__(self):
+        self.calls = []
+        self.default = types.SimpleNamespace(device=(2, 1))
+        self._initialized = 1
+
+    def stop(self):
+        self.calls.append("stop playback")
+
+    def _terminate(self):
+        self.calls.append("terminate")
+        self._initialized -= 1
+
+    def _initialize(self):
+        self.calls.append("initialize")
+        self._initialized += 1
+
+    def query_devices(self, index):
+        return {"name": f"device {index}", "default_samplerate": 48000.0}
+
+    def InputStream(self, device=None, **kwargs):
+        self.calls.append(f"open {device}")
+        return types.SimpleNamespace(start=lambda: self.calls.append("start"), stop=lambda: None, close=lambda: None)
+
+
+@pytest.fixture
+def fake_sd(monkeypatch):
+    sd = FakeSoundDevice()
+    monkeypatch.setitem(sys.modules, "sounddevice", sd)
+    monkeypatch.delenv("AUDIO_INPUT_FAKE_MIC", raising=False)
+    return sd
+
+
+def test_default_microphone_is_looked_up_for_every_recording(fake_sd):
+    # PortAudio reads the devices once; restarting it makes a changed macOS default count
+    rec = recorder.Recorder()
+    for _ in range(2):
+        rec.start()
+        rec.stop()
+    assert fake_sd.calls == ["stop playback", "terminate", "initialize", "open None", "start"] * 2
+
+
+def test_chosen_microphone_leaves_portaudio_alone(fake_sd, monkeypatch):
+    monkeypatch.setattr(recorder, "input_devices", lambda: [
+        {"index": 5, "name": "Logitech BRIO", "channels": 2, "samplerate": 48000, "default": False}])
+    rec = recorder.Recorder("brio")
+    rec.start()
+    rec.stop()
+    assert fake_sd.calls == ["open 5", "start"]
+
+
+def test_restart_after_a_failed_restart(fake_sd):
+    fake_sd._initialized = 0  # PortAudio was terminated, and initializing it again failed
+    recorder._restart_portaudio(fake_sd)
+    assert fake_sd.calls == ["stop playback", "initialize"]
+
+
+def test_playback_waits_for_a_portaudio_restart():
+    from audio_input.player import Player
+
+    assert Player()._lock is recorder.PORTAUDIO_LOCK
 
 
 def test_silence_is_not_speech():

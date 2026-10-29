@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Callable, Optional, Sequence
 
 import numpy as np
+
+from .recorder import PORTAUDIO_LOCK
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def sound_for(act: str, words: Sequence[dict], me: Optional[np.ndarray],
 
 class Player:
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = PORTAUDIO_LOCK  # also held while the recorder restarts PortAudio (which ends any playback)
         self.error: Optional[str] = None
 
     def play(self, audio: Optional[np.ndarray], sr: int = SR) -> bool:
