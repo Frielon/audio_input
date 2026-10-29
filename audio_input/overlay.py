@@ -31,14 +31,14 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import objc
-from AppKit import (NSAnimationContext, NSAppearance, NSBackingStoreBuffered, NSColor, NSEvent, NSMenu,
-                    NSMenuItem, NSPanel, NSScreen, NSStatusWindowLevel, NSTrackingActiveAlways, NSTrackingArea,
-                    NSTrackingInVisibleRect, NSTrackingMouseEnteredAndExited, NSTrackingMouseMoved, NSView,
-                    NSVisualEffectView,
+from AppKit import (NSAnimationContext, NSAppearance, NSBackingStoreBuffered, NSBezierPath, NSColor, NSEvent,
+                    NSImage, NSImageResizingModeStretch, NSMenu, NSMenuItem, NSPanel, NSScreen, NSStatusWindowLevel,
+                    NSTrackingActiveAlways, NSTrackingArea, NSTrackingInVisibleRect, NSTrackingMouseEnteredAndExited,
+                    NSTrackingMouseMoved, NSView, NSVisualEffectView,
                     NSWindowCollectionBehaviorCanJoinAllSpaces, NSWindowCollectionBehaviorFullScreenAuxiliary,
                     NSWindowCollectionBehaviorIgnoresCycle, NSWindowCollectionBehaviorStationary,
                     NSWindowStyleMaskBorderless, NSWindowStyleMaskNonactivatingPanel)
-from Foundation import NSURL, NSMakeRect, NSObject, NSZeroRect
+from Foundation import NSURL, NSEdgeInsets, NSMakeRect, NSMakeSize, NSObject, NSZeroRect
 from PyObjCTools import AppHelper
 from WebKit import WKUserContentController, WKWebView, WKWebViewConfiguration
 
@@ -51,6 +51,20 @@ RADIUS = 18
 
 WKScriptMessageHandler = objc.protocolNamed("WKScriptMessageHandler")
 WKNavigationDelegate = objc.protocolNamed("WKNavigationDelegate")
+
+
+def _rounded_mask(radius: float) -> NSImage:
+    """A rounded rectangle that stretches to any size (corners kept), for ``NSVisualEffectView.maskImage``."""
+    def draw(rect):
+        NSColor.blackColor().set()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, radius, radius).fill()
+        return True
+
+    edge = 2 * radius + 1
+    image = NSImage.imageWithSize_flipped_drawingHandler_(NSMakeSize(edge, edge), False, draw)
+    image.setCapInsets_(NSEdgeInsets(radius, radius, radius, radius))
+    image.setResizingMode_(NSImageResizingModeStretch)
+    return image
 
 
 class _Panel(NSPanel):
@@ -196,9 +210,9 @@ class Overlay:
         blur.setMaterial_(13)       # NSVisualEffectMaterialHUDWindow
         blur.setBlendingMode_(0)    # behind the window
         blur.setState_(1)           # always active, even though the app never is
-        blur.setWantsLayer_(True)
-        blur.layer().setCornerRadius_(RADIUS)
-        blur.layer().setMasksToBounds_(True)
+        # Rounded by a mask image, not a layer corner radius: the content view's mask is also the window's
+        # shape, so the shadow and the light rim macOS draws around a window follow the rounded corners.
+        blur.setMaskImage_(_rounded_mask(RADIUS))
         panel.setContentView_(blur)
 
         self.bridge = _Bridge.alloc().initWithOverlay_(self)
